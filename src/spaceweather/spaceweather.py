@@ -7,12 +7,6 @@ import requests
 from html.parser import HTMLParser
 from urllib.request import urlretrieve
 
-WP_URL = "http://localhost/index.php/wp-json/wp/v2/posts"
-WP_USER = "foo"
-WP_PASS = "bar"
-WP_CAT = 1
-API_KEY = ""
-
 class MyHTMLParser(HTMLParser):
 	message = False
 	content = False
@@ -61,9 +55,13 @@ class MyHTMLParser(HTMLParser):
 			self.image_vel = data
 
 			self.data += "<img src=\""+data+"\"><br>"
+	def clean(self):
+		self.data = ""
+		self.image_den = ""
+		self.image_vel = ""
 
 class NASA_DONKI_CME:
-	api_key= API_KEY
+	api_key = "01TjRKAF5JKRERBIKdYxI7DnQvJNARvjfh7gMiId"
 
 	def __init__(self):
 		# init some stuff
@@ -71,6 +69,7 @@ class NASA_DONKI_CME:
 		self.htmlParser = MyHTMLParser()
 
 	def getEventList(self):
+		# response = requests.get("http://api.open-notify.org/astros.jkson")
 		today = datetime.utcnow().date()
 		yesterday = today - timedelta(days=1)
 
@@ -81,7 +80,9 @@ class NASA_DONKI_CME:
 		link = ""
 		for event in data:
 			self.event_id = event["activityID"]
+			print("\n"+self.event_id)
 			analysis = event["cmeAnalyses"]
+			print(event)
 			enlilList = analysis[0]["enlilList"]
 			if (enlilList != None):
 				print(enlilList)
@@ -89,30 +90,59 @@ class NASA_DONKI_CME:
 					arrivaltime = enlil["estimatedShockArrivalTime"]
 					link = enlil["link"]
 		print("\n"+self.event_id)
-		print(link)
-		self.getNotification(link, self.event_id)
+		if (link != ""):
+			self.getNotification(link, self.event_id)
+		else:
+			print("getEventList link is null: "+ self.event_id)
 
 	def getNotification(self, url, id):
+		print("getNotification: "+ url)
 		response = requests.get(url)
+		#print(response.text)
 		self.htmlParser.feed(response.text)
+		#print(self.htmlParser.data)
 		self.publishCMEEvent(self.htmlParser.data, self.event_id)
 
 	def publishCMEEvent(self, body, title):
-		post_url = WP_URL
+		post_url = "http://localhost/index.php/wp-json/wp/v2/posts"
 		query = "?search="+title
 		response = requests.get(post_url+query)
 		if (len(response.json())>0):
 			print(response.json())
+			self.htmlParser.clean()
 			return
-		dataset = {"title":title,"content":body,"status": "publish","excerpt":"Solar CME Event", "categories": [WP_CAT]}
-		#print(dataset)
+		dataset = {"title":title,"content":body,"status": "publish","excerpt":"Solar CME Event", "categories": [4]}
+		#dataset = {"author": "abyssuser","title":title,"content":body,"status": "publish","excerpt":"Solar CME Event"}
+		print(dataset)
 		data = json.dumps(dataset)
 		headers = {"Authorization": "Basic"}
-		auth = (WP_USER,WP_PASS)
+		auth = ('abyssuser','3mZ9Bqff0g6^1pBwt3')
+		#response = requests.post(post_url,data,headers=headers,auth=auth)
 		response = requests.post(post_url,dataset,auth=auth)
-		#print(response.content)
+		print(response.content)
 		urlretrieve(self.htmlParser.image_vel, "/var/www/html/sol_velocity.gif")
 		urlretrieve(self.htmlParser.image_den, "/var/www/html/sol_density.gif")
+		#self.uploadImage("sol_velocity.gif", "/var/www/html/sol_velocity.gif")
+		#self.uploadImage("sol_density.gif", "/var/www/html/sol_density.gif")
+		self.htmlParser.clean()
+
+	def uploadImage(self, name, path):
+		mediaImageBytes = open(path, 'rb').read()
+		print("uploadImage: " + name)
+		curHeaders = {
+			"Content-Type": "image/gif",
+			"Accept": "application/json",
+			'Content-Disposition': "attachment; filename=%s" % name,
+		}
+		auth = ('abyssuser','3mZ9Bqff0g6^1pBwt3')
+
+		resp = requests.post(
+			"https://www.crifan.com/wp-json/wp/v2/media/133",
+			headers=curHeaders,
+			data=mediaBytes,
+			auth=auth
+		)
+
 
 sw = NASA_DONKI_CME()
 while(1):
